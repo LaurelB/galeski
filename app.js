@@ -1,4 +1,4 @@
-var geojson = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson';
+var geojson = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson"
 
 var earthquakeLayer = new L.LayerGroup();
 
@@ -9,59 +9,75 @@ var mapLayer = L.tileLayer("https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png
     accessToken: "pk.eyJ1IjoibGJ1dHRvbiIsImEiOiJja2N3Y3ZhamYwYTM0MnpxcGt3b256eXo5In0.vU5gLoHRULsIU-6WakyIyw"
 });
 
-var map = L.map("map", {
+var leafletMap = L.map("map", {
     center: [37.09, -95.71],
-    zoom: 3,
+    zoom: 2,
     layers: [mapLayer, earthquakeLayer]
 });
 
-d3.json(geojson, function(geojsonData) {
+L.control.layers(mapLayer, earthquakeLayer).addTo(myMap);
+
+d3.json(earthquakesURL, function(earthquakeData) {
     function markerScale(magnitude) {
         if (magnitude === 0) {
-            return 1;
+          return 1;
         }
-        else {
-            return magnitude * 2;
+        return magnitude * 3;
+    }
+
+    function geojsonMarkerOptions(feature) {
+        return {
+          opacity: 1,
+          fillOpacity: .8,
+          fillColor: markerColor(feature.properties.mag),
+          color: "#000000",
+          radius: markerScale(feature.properties.mag),
+          weight: 1
+        };
+    }
+
+    function markerColor(magnitude) {
+        switch (true) {
+        case magnitude > 5:
+            return "#581845";
+        case magnitude > 4:
+            return "#900C3F";
+        case magnitude > 3:
+            return "#C70039";
+        case magnitude > 2:
+            return "#FF5733";
+        case magnitude > 1:
+            return "#FFC300";
+        default:
+            return "#DAF7A6";
         }
     }
 
-    function geojsonMarkerOptions(magnitude) {
-        return {
-            radius: markerScale(feature.properties.mag),
-            fillColor: "#ffffff",
-            // fillColor: markerColor(feature.properties.mag),
-            color: "#000000",
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-        }
-    };
-
-    L.geoJSON(geojsonData, {
-        pointToLayer: function (feature, latlng) {
-            return L.circleMarker(latlng, geojsonMarkerOptions);
+    L.geoJSON(earthquakeData, {
+        pointToLayer: function(feature, latlng) {
+            return L.circleMarker(latlng);
         },
-        style: "style placeholder",
+        style: geojsonMarkerOptions,
         onEachFeature: function(feature, layer) {
-            layer.bindPopup("Location: " + feature.properties.place +"\nMagnitude: " + feature.properties.mag)
+            layer.bindPopup("Location: " + feature.properties.place +
+            "\nMagnitude: " + feature.properties.mag);
         }
+    }).addTo(earthquakes);
+    earthquakes.addTo(myMap);
 
-    }).addTo(earthquakeLayer);
-    earthquakeLayer.addTo(map);
+    var legend = L.control({ position: "bottomright" });
+    legend.onAdd = function() {
+        var div = L.DomUtil.create("div", "info legend"),
+        magnitudeLevels = [0, 1, 2, 3, 4, 5];
 
-    var legend = L.control({position: 'bottomright'});
+        div.innerHTML += "<h3>Magnitude</h3>"
 
-    legend.onAdd = function (map) {
-        var div = L.DomUtil.create('div', 'info legend'),
-            magnitudes = [0, 1, 2, 3, 4, 5];
-
-        for (var i = 0; i < magnitudes.length; i++) {
+        for (var i = 0; i < magnitudeLevels.length; i++) {
             div.innerHTML +=
-                '<i style="background:' + getColor(magnitudes[i] + 1) + '"/> ' +
-                magnitudes[i] + (magnitudes[i + 1] ? '&ndash;' + magnitudes[i + 1] + '<br>' : '+');
+                '<i style="background: ' + chooseColor(magnitudeLevels[i] + 1) + '"></i> ' +
+                magnitudeLevels[i] + (magnitudeLevels[i + 1] ? '&ndash;' + magnitudeLevels[i + 1] + '<br>' : '+');
         }
-
         return div;
     };
-    legend.addTo(map);
+    legend.addTo(leafletMap);
 });
