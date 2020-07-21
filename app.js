@@ -1,65 +1,67 @@
-function showMetaData(id) {
-    d3.json("samples.json").then((data) => {
-        const metadata = data.metadata;
-        const result = metadata.filter(meta => meta.id.toString() === id)[0];
-        const demographicInfo = d3.select("#metadata");
-        demographicInfo.html("");
-        Object.entries(result).forEach((key) => {
-            demographicInfo.append("h5").text(key[0] + ": " + key[1]);
-        });
-    });
-}
+var geojson = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson';
 
-function showPlot(id) {
-    d3.json("samples.json").then(data => {
-        var sampleFilter = data.samples.filter(sampleID => sampleID.id.toString() === id)[0];
-        var topTenValues = sampleFilter.sample_values.slice(0,10);
-        var topTenLabels = (sampleFilter.otu_ids.slice(0, 10)).map(id => "OTU " + id);
-        var topTenHovertext = sampleFilter.otu_labels.slice(0,10);
+var earthquakeLayer = new L.LayerGroup();
 
-        const barKey = [ {
-            x: topTenValues,
-            y: topTenLabels,
-            text: topTenHovertext,
-            type:"bar",
-            orientation: "h", // makes horizontal
-        } ];
+var mapLayer = L.tileLayer("https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
+    attribution: "Map data &copy; <a href=\"https://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"https://creativecommons.org/licenses/by-sa/2.0/\">CC-BY-SA</a>, Imagery © <a href=\"https://www.mapbox.com/\">Mapbox</a>",
+    maxZoom: 18,
+    id: "mapbox.satellite",
+    accessToken: "pk.eyJ1IjoibGJ1dHRvbiIsImEiOiJja2N3Y3ZhamYwYTM0MnpxcGt3b256eXo5In0.vU5gLoHRULsIU-6WakyIyw"
+});
 
-        Plotly.newPlot("barchart", barKey);
+var map = L.map("map", {
+    center: [37.09, -95.71],
+    zoom: 3,
+    layers: [mapLayer, earthquakeLayer]
+});
 
-        var ids = sampleFilter.otu_ids;
-        var values = sampleFilter.sample_values;
-        var hovertext = sampleFilter.otu_labels;
+d3.json(geojson, function(geojsonData) {
+    function markerScale(magnitude) {
+        if (magnitude === 0) {
+            return 1;
+        }
+        else {
+            return magnitude * 2;
+        }
+    }
 
-        const bubbleKey = [ {
-            x: ids,
-            y: values,
-            mode: "markers",
-            marker: {
-                size: values,
-                color: ids
-            },
-            text: hovertext
-        } ];
+    function geojsonMarkerOptions(magnitude) {
+        return {
+            radius: markerScale(feature.properties.mag),
+            fillColor: "#ffffff",
+            // fillColor: markerColor(feature.properties.mag),
+            color: "#000000",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+        }
+    };
 
-        Plotly.newPlot("bubblechart", bubbleKey);
-    });
-}
+    L.geoJSON(geojsonData, {
+        pointToLayer: function (feature, latlng) {
+            return L.circleMarker(latlng, geojsonMarkerOptions);
+        },
+        style: "style placeholder",
+        onEachFeature: function(feature, layer) {
+            layer.bindPopup("Location: " + feature.properties.place +"\nMagnitude: " + feature.properties.mag)
+        }
 
-function updateInfo(id) {
-    showPlot(id);
-    showMetaData(id);
-}
+    }).addTo(earthquakeLayer);
+    earthquakeLayer.addTo(map);
 
-function init() {
-    const dropdown = d3.select("#sampleID");
-    d3.json("samples.json").then((data)=> {
-        data.names.forEach(function(name) {
-            dropdown.append("option").text(name).property("value");
-        });
-        showPlot(data.names[0]);
-        showMetaData(data.names[0]);
-    });
-}
+    var legend = L.control({position: 'bottomright'});
 
-init();
+    legend.onAdd = function (map) {
+        var div = L.DomUtil.create('div', 'info legend'),
+            magnitudes = [0, 1, 2, 3, 4, 5];
+
+        for (var i = 0; i < magnitudes.length; i++) {
+            div.innerHTML +=
+                '<i style="background:' + getColor(magnitudes[i] + 1) + '"/> ' +
+                magnitudes[i] + (magnitudes[i + 1] ? '&ndash;' + magnitudes[i + 1] + '<br>' : '+');
+        }
+
+        return div;
+    };
+    legend.addTo(map);
+});
